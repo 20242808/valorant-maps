@@ -1,0 +1,54 @@
+import os
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+# 데이터셋 경로 설정 (여기에 맵 이미지가 저장된 폴더 경로를 입력)
+dataset_dir = '/path/to/dataset'
+
+# ImageDataGenerator를 사용하여 이미지 전처리
+datagen = ImageDataGenerator(rescale=1./255, validation_split=0.2)  # 20%는 검증용 데이터로 분할
+
+train_data = datagen.flow_from_directory(
+    dataset_dir,
+    target_size=(224, 224),  # 이미지 크기 맞추기
+    batch_size=32,
+    class_mode='categorical',  # 다중 클래스 분류
+    subset='training'  # 훈련용 데이터
+)
+
+validation_data = datagen.flow_from_directory(
+    dataset_dir,
+    target_size=(224, 224),
+    batch_size=32,
+    class_mode='categorical',  # 다중 클래스 분류
+    subset='validation'  # 검증용 데이터
+)
+
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras import layers, models
+
+# VGG16 모델을 기본으로 사용하는 전이 학습 방법
+base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+
+# 전이 학습을 사용할 때, base_model의 층은 학습되지 않도록 설정
+base_model.trainable = False
+
+# 모델의 새로운 층을 추가
+model = models.Sequential([
+    base_model,
+    layers.Flatten(),
+    layers.Dense(512, activation='relu'),
+    layers.Dropout(0.5),
+    layers.Dense(len(train_data.class_indices), activation='softmax')  # 클래스 수만큼 출력층
+])
+
+# 모델 컴파일
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+# 모델 학습
+history = model.fit(
+    train_data,
+    epochs=10,  # 원하는 에포크 수로 설정
+    validation_data=validation_data
+)
+
+# 학습이 끝난 후 모델 저장
+model.save('your_trained_model.h5')
